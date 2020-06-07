@@ -1,7 +1,7 @@
 /*PGR-GNU*****************************************************************
 
-Copyright (c) 2015 Celia Virginia Vergara Castillo
-Mail: project@pgrouting.org
+Copyright (c) 2020 Vjeran Crnjak
+Mail: vjeran@crnjak.xyz
 
 ------
 
