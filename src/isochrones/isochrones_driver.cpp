@@ -48,9 +48,6 @@ construct_adjacency_matrix(size_t n, const pgr_edge_t *edges,
   return adj;
 }
 
-// agg_cost at node, node id
-typedef std::tuple<double, int64_t> pq_el; // priority queue element
-
 struct Pred {
   int64_t edge_id;
   int64_t pred_id;
@@ -67,7 +64,9 @@ void dijkstra(int64_t start_vertex, double driving_distance,
   predecessors->assign(n, {-1, -1, std::numeric_limits<double>::infinity()});
   distances->assign(n, std::numeric_limits<double>::infinity());
   (*predecessors)[0] = {-1, -1, 0.};
-  std::set<pq_el> q; // priority queue
+
+  typedef std::tuple<double, int64_t> pq_el; // <agg_cost at node, node id>
+  std::set<pq_el> q;                         // priority queue
   q.insert({0., start_vertex});
   while (!q.empty()) {
     double dist;
@@ -123,10 +122,9 @@ std::unordered_map<int64_t, int64_t> remap_edges(pgr_edge_t *data_edges,
   return mapping;
 }
 
-std::vector<General_path_element_t> do_dijkstra(pgr_edge_t *data_edges,
-                                                size_t total_edges,
-                                                int64_t *start_vertex,
-                                                size_t s_len, double distance) {
+std::vector<General_path_element_t>
+do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
+                  int64_t *start_vertex, size_t s_len, double distance) {
   // Extracting vertices and mapping the ids from 0 to N-1. Remapping is done
   // so that data structures used can be simpler (arrays instead of maps).
   std::unordered_map<int64_t, int64_t> mapping =
@@ -229,8 +227,8 @@ void do_pgr_many_to_isochrones(pgr_edge_t *data_edges, size_t total_edges,
     pgassert(*return_count == 0);
     pgassert((*return_tuples) == NULL);
 
-    auto results =
-        do_dijkstra(data_edges, total_edges, start_vertex, s_len, distance);
+    auto results = do_many_dijkstras(data_edges, total_edges, start_vertex,
+                                     s_len, distance);
 
     size_t count(results.size());
     if (count == 0) {
