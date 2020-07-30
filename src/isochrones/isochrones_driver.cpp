@@ -22,6 +22,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
  ********************************************************************PGR-GNU*/
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
 #include <set>
 #include <sstream>
 #include <unordered_map>
@@ -50,10 +53,11 @@ construct_adjacency_matrix(size_t n, const pgr_edge_t *edges,
 
 void dijkstra(int64_t start_vertex, double driving_distance,
               const std::vector<std::vector<const pgr_edge_t *>> &adj,
+              std::vector<int64_t> *predecessors,
               std::vector<double> *distances) {
   size_t n = adj.size();
   distances->assign(n, std::numeric_limits<double>::infinity());
-
+  predecessors->assign(n, -1);
   typedef std::tuple<double, int64_t> pq_el; // <agg_cost at node, node id>
   std::set<pq_el> q;                         // priority queue
   q.insert({0., start_vertex});
@@ -72,6 +76,7 @@ void dijkstra(int64_t start_vertex, double driving_distance,
       if ((*distances)[target] > agg_cost) {
         q.erase({(*distances)[target], target});
         (*distances)[target] = agg_cost;
+        (*predecessors)[target] = node_id;
         q.emplace((*distances)[target], target);
       }
     }
@@ -160,6 +165,7 @@ do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
       construct_adjacency_matrix(mapping.size(), data_edges, total_edges);
   // Storing the result of dijkstra call and reusing the memory for each vertex.
   std::vector<double> distances(nodes_count);
+  std::vector<int64_t> predecessors(nodes_count);
   for (int64_t start_v : start_vertices) {
     auto it = mapping.find(start_v);
     // If start_v did not appear in edges then it has no particular mapping but
@@ -178,9 +184,9 @@ do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
     // Calling the dijkstra algorithm and storing the results in predecessors
     // and distances.
     dijkstra(it->second,
-             /* driving_distance */ max_dist_cutoff, adj, &distances);
+             /* driving_distance */ max_dist_cutoff, adj, &predecessors,
+             &distances);
     // Appending the row results.
-    int seq = 0;
     for (size_t i = 0; i < total_edges; ++i) {
       const pgr_edge_t &e = *(data_edges + i);
       double scost = distances[e.source];
@@ -191,11 +197,10 @@ do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
         continue;
       }
       size_t r_i = results.size();
-      if (t_reached) {
+      if (t_reached && predecessors[e.target] != e.source) {
+        // If we didn't come to t from s then traverse the edge.
         append_edge_result(tcost, e.reverse_cost, distance_limits, &results);
         for (size_t rev_i = r_i; rev_i < results.size(); ++rev_i) {
-          results[rev_i].edge = e.id;
-          results[rev_i].start_id = start_v;
           // reversing the percentage.
           double nstart_perc = 1. - results[rev_i].end_perc;
           results[rev_i].end_perc = 1. - results[rev_i].start_perc;
@@ -205,7 +210,8 @@ do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
           // results[r_i].end_perc - filled in append_edge_result
         }
       }
-      if (s_reached) {
+      if (s_reached && predecessors[e.source] != e.target) {
+        // If we didn't come to s from t then traverse the edge.
         append_edge_result(scost, e.cost, distance_limits, &results);
       }
       for (; r_i < results.size(); ++r_i) {
