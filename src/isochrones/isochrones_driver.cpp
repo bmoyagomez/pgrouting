@@ -191,11 +191,22 @@ do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
         continue;
       }
       size_t r_i = results.size();
-      if (s_reached) {
-        append_edge_result(scost, e.cost, distance_limits, &results);
-      }
       if (t_reached) {
         append_edge_result(tcost, e.reverse_cost, distance_limits, &results);
+        for (size_t rev_i = r_i; rev_i < results.size(); ++rev_i) {
+          results[rev_i].edge = e.id;
+          results[rev_i].start_id = start_v;
+          // reversing the percentage.
+          double nstart_perc = 1. - results[rev_i].end_perc;
+          results[rev_i].end_perc = 1. - results[rev_i].start_perc;
+          results[rev_i].start_perc = nstart_perc;
+          // results[r_i].cutoff  -- filled in append_edge_result
+          // results[r_i].start_perc -- filled in append_edge_result
+          // results[r_i].end_perc - filled in append_edge_result
+        }
+      }
+      if (s_reached) {
+        append_edge_result(scost, e.cost, distance_limits, &results);
       }
       for (; r_i < results.size(); ++r_i) {
         results[r_i].edge = e.id;
