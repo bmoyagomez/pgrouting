@@ -26,15 +26,14 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #define INCLUDE_C_COMMON_ARRAYS_INPUT_H_
 #pragma once
 
-
 #include <stdint.h>
 
 #ifdef __GNUC__
-#   if __GNUC__ > 5
-#       pragma GCC diagnostic ignored "-Wpedantic"
-#   else
-#       pragma GCC diagnostic ignored "-pedantic"
-#   endif
+#if __GNUC__ > 5
+#pragma GCC diagnostic ignored "-Wpedantic"
+#else
+#pragma GCC diagnostic ignored "-pedantic"
+#endif
 #endif
 
 #include <postgres.h>
@@ -46,11 +45,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 // for ArrayType
 #include "utils/array.h"
 
-
 /** @brief enforces the input array to be @b NOT empty */
-int64_t* pgr_get_bigIntArray(size_t *arrlen, ArrayType *input);
+int64_t *pgr_get_bigIntArray(size_t *arrlen, ArrayType *input);
 
 /** @brief Allows the input array to be empty */
-int64_t* pgr_get_bigIntArray_allowEmpty(size_t *arrlen, ArrayType *input);
+int64_t *pgr_get_bigIntArray_allowEmpty(size_t *arrlen, ArrayType *input);
 
-#endif  // INCLUDE_C_COMMON_ARRAYS_INPUT_H_
+/** @brief enforces the input array to be @b NOT empty */
+double *pgr_get_doubleArray(size_t *arrlen, ArrayType *input);
+
+#endif // INCLUDE_C_COMMON_ARRAYS_INPUT_H_

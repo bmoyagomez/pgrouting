@@ -42,15 +42,18 @@ static
 void process(
         char* sql,
         ArrayType *starts,
-        float8 distance,
+        ArrayType *distances,
         bool directed,
         bool equicost,
-        General_path_element_t **result_tuples,
+        Isochrones_path_element_t **result_tuples,
         size_t *result_count) {
     pgr_SPI_connect();
 
     size_t size_start_vidsArr = 0;
     int64_t* start_vidsArr = pgr_get_bigIntArray(&size_start_vidsArr, starts);
+
+    size_t size_distance_cutoffsArr = 0;
+    double * distance_cutoffsArr = pgr_get_doubleArray(&size_distance_cutoffsArr, distances);
 
     pgr_edge_t *edges = NULL;
     size_t total_tuples = 0;
@@ -68,7 +71,7 @@ void process(
     do_pgr_many_to_isochrones(
             edges, total_tuples,
             start_vidsArr, size_start_vidsArr,
-            distance,
+            distance_cutoffsArr, size_distance_cutoffsArr,
             directed,
             equicost,
             result_tuples, result_count,
@@ -103,7 +106,7 @@ many_to_isochrones(PG_FUNCTION_ARGS) {
     TupleDesc            tuple_desc;
 
     /**********************************************************************/
-    General_path_element_t* result_tuples = 0;
+    Isochrones_path_element_t* result_tuples = 0;
     size_t result_count = 0;
     /**********************************************************************/
 
@@ -119,7 +122,7 @@ many_to_isochrones(PG_FUNCTION_ARGS) {
         process(
                 text_to_cstring(PG_GETARG_TEXT_P(0)),
                 PG_GETARG_ARRAYTYPE_P(1),
-                PG_GETARG_FLOAT8(2),
+                PG_GETARG_ARRAYTYPE_P(2),
                 PG_GETARG_BOOL(3),
                 PG_GETARG_BOOL(4),
                 &result_tuples, &result_count);
@@ -148,7 +151,7 @@ many_to_isochrones(PG_FUNCTION_ARGS) {
     funcctx = SRF_PERCALL_SETUP();
 
     tuple_desc = funcctx->tuple_desc;
-    result_tuples = (General_path_element_t*) funcctx->user_fctx;
+    result_tuples = (Isochrones_path_element_t*) funcctx->user_fctx;
 
     if (funcctx->call_cntr < funcctx->max_calls) {
         HeapTuple    tuple;
@@ -165,12 +168,13 @@ many_to_isochrones(PG_FUNCTION_ARGS) {
         for (i = 0; i < numb; ++i) {
             nulls[i] = false;
         }
+
         values[0] = Int32GetDatum(funcctx->call_cntr + 1);
         values[1] = Int64GetDatum(result_tuples[funcctx->call_cntr].start_id);
-        values[2] = Int64GetDatum(result_tuples[funcctx->call_cntr].node);
-        values[3] = Int64GetDatum(result_tuples[funcctx->call_cntr].edge);
-        values[4] = Float8GetDatum(result_tuples[funcctx->call_cntr].cost);
-        values[5] = Float8GetDatum(result_tuples[funcctx->call_cntr].agg_cost);
+        values[2] = Int64GetDatum(result_tuples[funcctx->call_cntr].edge);
+        values[3] = Float8GetDatum(result_tuples[funcctx->call_cntr].start_perc);
+        values[4] = Float8GetDatum(result_tuples[funcctx->call_cntr].end_perc);
+        values[5] = Float8GetDatum(result_tuples[funcctx->call_cntr].cutoff);
 
         /**********************************************************************/
         tuple = heap_form_tuple(tuple_desc, values, nulls);

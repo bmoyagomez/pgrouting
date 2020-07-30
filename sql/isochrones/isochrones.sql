@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 CREATE OR REPLACE FUNCTION pgr_isochrones(
     edges_sql text,
     start_vids anyarray,
-    distance FLOAT,
+    distances anyarray, /* double array */
     directed BOOLEAN DEFAULT TRUE,
     equicost BOOLEAN DEFAULT FALSE,
     OUT seq integer,
@@ -41,7 +41,7 @@ CREATE OR REPLACE FUNCTION pgr_isochrones(
 CREATE OR REPLACE FUNCTION pgr_isochrones(
     edges_sql text,
     start_vid bigint,
-    distance FLOAT8,
+    distances anyarray,  /* double array */
     directed BOOLEAN DEFAULT TRUE,
     OUT seq integer,
     OUT node bigint,

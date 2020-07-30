@@ -48,22 +48,11 @@ construct_adjacency_matrix(size_t n, const pgr_edge_t *edges,
   return adj;
 }
 
-struct Pred {
-  int64_t edge_id;
-  int64_t pred_id;
-  double cost; // cost of the edge by going from pred_id to target, cost can be
-               // partial if this is the leaf (driving_distance is respected).
-               // target can be either pgr_edge_t.{source,target}, depending on
-               // which cost is used pgr_edge_t.{cost,reverse_cost}.
-};
-
 void dijkstra(int64_t start_vertex, double driving_distance,
               const std::vector<std::vector<const pgr_edge_t *>> &adj,
-              std::vector<Pred> *predecessors, std::vector<double> *distances) {
+              std::vector<double> *distances) {
   size_t n = adj.size();
-  predecessors->assign(n, {-1, -1, std::numeric_limits<double>::infinity()});
   distances->assign(n, std::numeric_limits<double>::infinity());
-  (*predecessors)[0] = {-1, -1, 0.};
 
   typedef std::tuple<double, int64_t> pq_el; // <agg_cost at node, node id>
   std::set<pq_el> q;                         // priority queue
@@ -82,12 +71,7 @@ void dijkstra(int64_t start_vertex, double driving_distance,
       double agg_cost = dist + cost;
       if ((*distances)[target] > agg_cost) {
         q.erase({(*distances)[target], target});
-        (*distances)[target] =
-            agg_cost > driving_distance ? driving_distance : agg_cost;
-        double edge_cost =
-            agg_cost > driving_distance ? (driving_distance - dist) : cost;
-        // Storing the partial travel edge cost.
-        (*predecessors)[target] = {e->id, node_id, edge_cost};
+        (*distances)[target] = agg_cost;
         q.emplace((*distances)[target], target);
       }
     }
@@ -122,96 +106,120 @@ std::unordered_map<int64_t, int64_t> remap_edges(pgr_edge_t *data_edges,
   return mapping;
 }
 
-std::vector<General_path_element_t>
+void append_edge_result(const double &cost_at_node, const double &edge_cost,
+                        const std::vector<double> &distance_limits,
+                        std::vector<Isochrones_path_element_t> *results) {
+  double current_cost = cost_at_node;
+  double travel_cost = edge_cost;
+  double start_perc = 0.;
+  for (auto &dl : distance_limits) {
+    if (cost_at_node >= dl) {
+      continue;
+    }
+    double cost_at_target = current_cost + travel_cost;
+    Isochrones_path_element_t r;
+    if (cost_at_target < dl) {
+      r.start_perc = start_perc;
+      r.end_perc = 1.;
+      r.cutoff = dl;
+      results->push_back(r);
+      break;
+    }
+    // cost_at_target is bigger than the limit, partial edge
+    travel_cost = cost_at_target - dl; // remaining travel cost
+    double partial_travel = dl - current_cost;
+    r.start_perc = start_perc;
+    r.end_perc = start_perc + partial_travel / edge_cost;
+    r.cutoff = dl;
+    results->push_back(r);
+
+    start_perc = r.end_perc;
+    current_cost = dl;
+    // A ---------- B
+    // 5    7    9  10
+  }
+}
+
+std::vector<Isochrones_path_element_t>
 do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
-                  int64_t *start_vertex, size_t s_len, double distance) {
+                  std::vector<int64_t> start_vertices,
+                  std::vector<double> distance_limits) {
+  std::sort(distance_limits.begin(), distance_limits.end());
+  // Using max distance limit for a single dijkstra call. After that we will
+  // postprocess the results and mark the visited edges.
+  double max_dist_cutoff = *distance_limits.rbegin();
   // Extracting vertices and mapping the ids from 0 to N-1. Remapping is done
   // so that data structures used can be simpler (arrays instead of maps).
   std::unordered_map<int64_t, int64_t> mapping =
       // modifying data_edges source/target fields.
       remap_edges(data_edges, total_edges);
   size_t nodes_count = mapping.size();
-  std::vector<General_path_element_t> results;
-  std::vector<int64_t> start_vertices(start_vertex, start_vertex + s_len);
+  std::vector<Isochrones_path_element_t> results;
+
   auto adj =
       construct_adjacency_matrix(mapping.size(), data_edges, total_edges);
   // Storing the result of dijkstra call and reusing the memory for each vertex.
-  std::vector<Pred> predecessors(nodes_count);
   std::vector<double> distances(nodes_count);
   for (int64_t start_v : start_vertices) {
     auto it = mapping.find(start_v);
     // If start_v did not appear in edges then it has no particular mapping but
     // pgr_drivingDistance result includes one row for this node.
     if (it == mapping.end()) {
-      General_path_element_t r;
-      r.seq = 0;
+      Isochrones_path_element_t r;
       r.start_id = start_v;
-      r.end_id = start_v;
-      r.node = start_v;
       // -2 tags the unmapped starting vertex and won't use the reverse_mapping
       // because mapping does not exist. -2 is changed to -1 later.
-      r.edge = -2;
-      r.cost = 0.0;
-      r.agg_cost = 0.0;
+      r.edge = -1;
+      r.start_perc = 0.0;
+      r.end_perc = 0.0;
       results.push_back(r);
       continue;
     }
     // Calling the dijkstra algorithm and storing the results in predecessors
     // and distances.
     dijkstra(it->second,
-             /* driving_distance */ distance, adj, &predecessors, &distances);
+             /* driving_distance */ max_dist_cutoff, adj, &distances);
     // Appending the row results.
-    for (int64_t node_id = 0; node_id < predecessors.size(); ++node_id) {
-      const Pred &pred = predecessors[node_id];
-      if (std::isinf(pred.cost) || pred.cost > distance) {
-        // Node not reached or reached too late is skipped.
+    int seq = 0;
+    for (size_t i = 0; i < total_edges; ++i) {
+      const pgr_edge_t &e = *(data_edges + i);
+      double scost = distances[e.source];
+      double tcost = distances[e.target];
+      bool s_reached = !(std::isinf(scost) || scost > max_dist_cutoff);
+      bool t_reached = !(std::isinf(tcost) || tcost > max_dist_cutoff);
+      if (!s_reached && !t_reached) {
         continue;
       }
-      General_path_element_t r;
-      // r.seq is filled later. r.node is remapped later.
-      r.start_id = start_v;
-      r.end_id = start_v;
-      r.edge = pred.edge_id;
-      r.node = node_id;
-      r.cost = pred.cost;
-      r.agg_cost = distances[node_id];
-      results.push_back(r);
+      size_t r_i = results.size();
+      if (s_reached) {
+        append_edge_result(scost, e.cost, distance_limits, &results);
+      }
+      if (t_reached) {
+        append_edge_result(tcost, e.reverse_cost, distance_limits, &results);
+      }
+      for (; r_i < results.size(); ++r_i) {
+        results[r_i].edge = e.id;
+        results[r_i].start_id = start_v;
+        // results[r_i].cutoff  -- filled in append_edge_result
+        // results[r_i].start_perc -- filled in append_edge_result
+        // results[r_i].end_perc - filled in append_edge_result
+      }
     }
   }
-  // The 0 to N-1 ids need to be mapped back to their previous values.
-  std::vector<int64_t> reverse_mapping(mapping.size());
-  for (auto &m : mapping) {
-    reverse_mapping[m.second] = m.first;
-  }
-  int seq_cnt = 0;
-  int64_t prev_start_id = -1;
-  for (size_t i = 0; i < results.size(); ++i) {
-    auto &r = results[i];
-    if (r.edge == -2) {
-      // This is a starting vertex that has no edges in graph.
-      r.seq = 0;
-      // Changing back the -2 edge indicator to -1.
-      r.edge = -1;
-      // Force seq_cnt reset in next iteration and avoid accidental id clash
-      // with the mapping.
-      prev_start_id = -1;
-      continue;
-    }
-    if (r.start_id != prev_start_id) {
-      prev_start_id = r.start_id;
-      seq_cnt = 0;
-    }
-    r.seq = seq_cnt++;
-    r.node = reverse_mapping[r.node];
-  }
+  // sorting by cutoffs.
+  std::sort(results.begin(), results.end(),
+            [](Isochrones_path_element_t &a, Isochrones_path_element_t &b) {
+              return std::tie(a.start_id, a.cutoff) <
+                     std::tie(b.start_id, b.cutoff);
+            });
   return results;
 }
 
 void do_pgr_many_to_isochrones(pgr_edge_t *data_edges, size_t total_edges,
                                int64_t *start_vertex, size_t s_len,
-                               double distance, bool directedFlag,
-                               bool equiCostFlag,
-                               General_path_element_t **return_tuples,
+                               double *distance_cutoffs, size_t d_len,
+                               bool directedFlag, bool equiCostFlag,
+                               Isochrones_path_element_t **return_tuples,
                                size_t *return_count, char **log_msg,
                                char **notice_msg, char **err_msg) {
   std::ostringstream log;
@@ -227,8 +235,10 @@ void do_pgr_many_to_isochrones(pgr_edge_t *data_edges, size_t total_edges,
     pgassert(*return_count == 0);
     pgassert((*return_tuples) == NULL);
 
-    auto results = do_many_dijkstras(data_edges, total_edges, start_vertex,
-                                     s_len, distance);
+    std::vector<int64_t> start_vertices(start_vertex, start_vertex + s_len);
+    std::vector<double> distances(distance_cutoffs, distance_cutoffs + d_len);
+    auto results =
+        do_many_dijkstras(data_edges, total_edges, start_vertices, distances);
 
     size_t count(results.size());
     if (count == 0) {
