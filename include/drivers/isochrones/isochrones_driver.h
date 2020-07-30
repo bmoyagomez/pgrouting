@@ -35,14 +35,23 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #include "c_types/general_path_element_t.h"
 #include "c_types/pgr_edge_t.h"
 
+typedef struct {
+  int64_t start_id;
+  int64_t edge;
+  double start_perc;
+  double end_perc;
+  double cutoff;
+} Isochrones_path_element_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void do_pgr_many_to_isochrones(pgr_edge_t *edges, size_t total_edges,
                                int64_t *start_vertex, size_t s_len,
-                               double distance, bool directed, bool equicost,
-                               General_path_element_t **return_tuples,
+                               double *distances, size_t d_len, bool directed,
+                               bool equicost,
+                               Isochrones_path_element_t **return_tuples,
                                size_t *return_count, char **log_msg,
                                char **notice_msg, char **err_msg);
 
