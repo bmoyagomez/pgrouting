@@ -48,9 +48,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 
 /** @brief enforces the input array to be @b NOT empty */
-int64_t* pgr_get_bigIntArray(size_t *arrlen, ArrayType *input);
+int64_t *pgr_get_bigIntArray(size_t *arrlen, ArrayType *input);
 
 /** @brief Allows the input array to be empty */
-int64_t* pgr_get_bigIntArray_allowEmpty(size_t *arrlen, ArrayType *input);
+int64_t *pgr_get_bigIntArray_allowEmpty(size_t *arrlen, ArrayType *input);
+
+/** @brief enforces the input array to be @b NOT empty */
+double *pgr_get_doubleArray(size_t *arrlen, ArrayType *input);
 
 #endif  // INCLUDE_C_COMMON_ARRAYS_INPUT_H_

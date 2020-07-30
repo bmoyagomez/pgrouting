@@ -130,3 +130,92 @@ int64_t* pgr_get_bigIntArray(size_t *arrlen, ArrayType *input) {
 int64_t* pgr_get_bigIntArray_allowEmpty(size_t *arrlen, ArrayType *input) {
     return pgr_get_bigIntArr(input, arrlen, true);
 }
+
+static
+double*
+pgr_get_doubleArr(ArrayType *v, size_t *arrlen, bool allow_empty) {
+    clock_t start_t = clock();
+    double *c_array = NULL;;
+
+    Oid     element_type = ARR_ELEMTYPE(v);
+    int    *dim = ARR_DIMS(v);
+    int     ndim = ARR_NDIM(v);
+    int     nitems = ArrayGetNItems(ndim, dim);
+    Datum  *elements;
+    bool   *nulls;
+    int16   typlen;
+    bool    typbyval;
+    char    typalign;
+
+    assert((*arrlen) == 0);
+
+
+    if (allow_empty && (ndim == 0 || nitems <= 0)) {
+        PGR_DBG("ndim %i nitems % i", ndim, nitems);
+        return (double*) NULL;
+    }
+    /* the array is not empty*/
+
+    if (ndim != 1) {
+        elog(ERROR, "One dimension expected");
+        return (double*)NULL;
+    }
+
+    if (nitems <= 0) {
+        elog(ERROR, "No elements found");
+        return (double*)NULL;
+    }
+
+    get_typlenbyvalalign(element_type,
+            &typlen, &typbyval, &typalign);
+
+    /* validate input data type */
+    switch (element_type) {
+        case FLOAT4OID:
+        case FLOAT8OID:
+            break;
+        default:
+            elog(ERROR, "Expected array of ANY-FLOAT");
+            return (double*)NULL;
+            break;
+    }
+
+    deconstruct_array(v, element_type, typlen, typbyval,
+            typalign, &elements, &nulls,
+            &nitems);
+
+    c_array = (double *) palloc(sizeof(double) * (size_t)nitems);
+    if (!c_array) {
+        elog(ERROR, "Out of memory!");
+    }
+
+
+    int i;
+    for (i = 0; i < nitems; i++) {
+        if (nulls[i]) {
+            pfree(c_array);
+            elog(ERROR, "NULL value found in Array!");
+        } else {
+            switch (element_type) {
+                case FLOAT4OID:
+                    c_array[i] = (double) DatumGetFloat4(elements[i]);
+                    break;
+                case FLOAT8OID:
+                    c_array[i] = (double) DatumGetFloat8(elements[i]);
+                    break;
+            }
+        }
+    }
+    (*arrlen) = (size_t)nitems;
+
+    pfree(elements);
+    pfree(nulls);
+    PGR_DBG("Array size %ld", (*arrlen));
+    time_msg("reading Array", start_t, clock());
+    return c_array;
+}
+
+
+double* pgr_get_doubleArray(size_t *arrlen, ArrayType *input) {
+    return pgr_get_doubleArr(input, arrlen, false);
+}
