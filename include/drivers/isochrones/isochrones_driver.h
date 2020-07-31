@@ -40,7 +40,8 @@ typedef struct {
   int64_t edge;
   double start_perc;
   double end_perc;
-  double cutoff;
+  double start_cost;
+  double end_cost;
 } Isochrones_path_element_t;
 
 #ifdef __cplusplus
