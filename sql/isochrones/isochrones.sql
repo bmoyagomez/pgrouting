@@ -29,10 +29,10 @@ CREATE OR REPLACE FUNCTION pgr_isochrones(
     equicost BOOLEAN DEFAULT FALSE,
     OUT seq integer,
     OUT from_v  bigint,
-    OUT node bigint,
     OUT edge bigint,
-    OUT cost FLOAT,
-    OUT agg_cost FLOAT)
+    OUT start_perc FLOAT,
+    OUT end_perc FLOAT,
+    OUT cutoff FLOAT)
   RETURNS SETOF RECORD AS
      '${MODULE_PATHNAME}', 'many_to_isochrones'
  LANGUAGE c VOLATILE STRICT;
@@ -44,13 +44,14 @@ CREATE OR REPLACE FUNCTION pgr_isochrones(
     distances anyarray,  /* double array */
     directed BOOLEAN DEFAULT TRUE,
     OUT seq integer,
-    OUT node bigint,
+    OUT from_v  bigint,
     OUT edge bigint,
-    OUT cost FLOAT,
-    OUT agg_cost FLOAT)
+    OUT start_perc FLOAT,
+    OUT end_perc FLOAT,
+    OUT cutoff FLOAT)
   RETURNS SETOF RECORD AS
 $BODY$
-    SELECT a.seq, a.node, a.edge, a.cost, a.agg_cost
+    SELECT a.seq, a.from_v, a.edge, a.start_perc, a.end_perc, a.cutoff
     FROM pgr_isochrones($1, ARRAY[$2]::BIGINT[], $3, $4, false) a;
 $BODY$
 LANGUAGE SQL VOLATILE STRICT
