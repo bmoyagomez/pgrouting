@@ -160,7 +160,7 @@ many_to_isochrones(PG_FUNCTION_ARGS) {
         bool* nulls;
 
         /**********************************************************************/
-        size_t numb = 6;
+        size_t numb = 7;
         values = palloc(numb * sizeof(Datum));
         nulls = palloc(numb * sizeof(bool));
 
@@ -174,7 +174,8 @@ many_to_isochrones(PG_FUNCTION_ARGS) {
         values[2] = Int64GetDatum(result_tuples[funcctx->call_cntr].edge);
         values[3] = Float8GetDatum(result_tuples[funcctx->call_cntr].start_perc);
         values[4] = Float8GetDatum(result_tuples[funcctx->call_cntr].end_perc);
-        values[5] = Float8GetDatum(result_tuples[funcctx->call_cntr].cutoff);
+        values[5] = Float8GetDatum(result_tuples[funcctx->call_cntr].start_cost);
+        values[6] = Float8GetDatum(result_tuples[funcctx->call_cntr].end_cost);
 
         /**********************************************************************/
         tuple = heap_form_tuple(tuple_desc, values, nulls);

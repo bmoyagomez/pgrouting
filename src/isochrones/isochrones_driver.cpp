@@ -126,7 +126,8 @@ void append_edge_result(const double &cost_at_node, const double &edge_cost,
     if (cost_at_target < dl) {
       r.start_perc = start_perc;
       r.end_perc = 1.;
-      r.cutoff = dl;
+      r.start_cost = current_cost;
+      r.end_cost = cost_at_target;
       results->push_back(r);
       break;
     }
@@ -135,7 +136,8 @@ void append_edge_result(const double &cost_at_node, const double &edge_cost,
     double partial_travel = dl - current_cost;
     r.start_perc = start_perc;
     r.end_perc = start_perc + partial_travel / edge_cost;
-    r.cutoff = dl;
+    r.start_cost = current_cost;
+    r.end_cost = dl;
     results->push_back(r);
 
     start_perc = r.end_perc;
@@ -198,26 +200,28 @@ do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
       }
       size_t r_i = results.size();
       if (t_reached && predecessors[e.target] != e.source) {
-        // If we didn't come to t from s then traverse the edge.
         append_edge_result(tcost, e.reverse_cost, distance_limits, &results);
         for (size_t rev_i = r_i; rev_i < results.size(); ++rev_i) {
-          // reversing the percentage.
+          // reversing the percentage
           double nstart_perc = 1. - results[rev_i].end_perc;
           results[rev_i].end_perc = 1. - results[rev_i].start_perc;
           results[rev_i].start_perc = nstart_perc;
-          // results[r_i].cutoff  -- filled in append_edge_result
+          // reversing the cost
+          std::swap(results[rev_i].start_cost, results[rev_i].end_cost);
+          // results[r_i].start_cost  -- filled in append_edge_result
+          // results[r_i].end_cost  -- filled in append_edge_result
           // results[r_i].start_perc -- filled in append_edge_result
           // results[r_i].end_perc - filled in append_edge_result
         }
       }
       if (s_reached && predecessors[e.source] != e.target) {
-        // If we didn't come to s from t then traverse the edge.
         append_edge_result(scost, e.cost, distance_limits, &results);
       }
       for (; r_i < results.size(); ++r_i) {
         results[r_i].edge = e.id;
         results[r_i].start_id = start_v;
-        // results[r_i].cutoff  -- filled in append_edge_result
+        // results[r_i].start_cost  -- filled in append_edge_result
+        // results[r_i].end_cost  -- filled in append_edge_result
         // results[r_i].start_perc -- filled in append_edge_result
         // results[r_i].end_perc - filled in append_edge_result
       }
@@ -226,8 +230,8 @@ do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
   // sorting by cutoffs.
   std::sort(results.begin(), results.end(),
             [](Isochrones_path_element_t &a, Isochrones_path_element_t &b) {
-              return std::tie(a.start_id, a.cutoff) <
-                     std::tie(b.start_id, b.cutoff);
+              return std::tie(a.start_id, a.end_cost) <
+                     std::tie(b.start_id, b.end_cost);
             });
   return results;
 }
