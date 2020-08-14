@@ -43,8 +43,7 @@ void process(
         char* sql,
         ArrayType *starts,
         ArrayType *distances,
-        bool directed,
-        bool equicost,
+        bool remove_duplicates,
         Isochrones_path_element_t **result_tuples,
         size_t *result_count) {
     pgr_SPI_connect();
@@ -72,8 +71,7 @@ void process(
             edges, total_tuples,
             start_vidsArr, size_start_vidsArr,
             distance_cutoffsArr, size_distance_cutoffsArr,
-            directed,
-            equicost,
+            remove_duplicates,
             result_tuples, result_count,
             &log_msg,
             &notice_msg,
@@ -124,7 +122,6 @@ many_to_isochrones(PG_FUNCTION_ARGS) {
                 PG_GETARG_ARRAYTYPE_P(1),
                 PG_GETARG_ARRAYTYPE_P(2),
                 PG_GETARG_BOOL(3),
-                PG_GETARG_BOOL(4),
                 &result_tuples, &result_count);
 
         /**********************************************************************/
