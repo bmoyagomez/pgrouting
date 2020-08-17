@@ -148,7 +148,7 @@ void append_edge_result(const double &cost_at_node, const double &edge_cost,
 }
 
 bool is_partial_edge(const Isochrones_path_element_t &p) {
-  return p.start_cost != 0. || p.end_cost != 1.;
+  return p.start_perc != 0. || p.end_perc != 1.;
 }
 
 size_t find_min_full_edge(size_t r_i,
