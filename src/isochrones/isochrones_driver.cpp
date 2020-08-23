@@ -147,56 +147,11 @@ void append_edge_result(const double &cost_at_node, const double &edge_cost,
   }
 }
 
-bool is_partial_edge(const Isochrones_path_element_t &p) {
-  return p.start_cost != 0. || p.end_cost != 1.;
-}
-
-size_t find_min_full_edge(size_t r_i,
-                          const std::vector<Isochrones_path_element_t> &v) {
-  size_t mn_idx = -1;
-  double min_cost = std::numeric_limits<double>::infinity();
-  for (size_t i = r_i; i < v.size(); ++i) {
-    auto &&p = v[i];
-    if (is_partial_edge(p)) {
-      continue;
-    }
-    // larger cost is at the node where the traveller arrives.
-    double mx = std::max(p.start_cost, p.end_cost);
-    if (mx < min_cost) {
-      mn_idx = i;
-      min_cost = mx;
-    }
-  }
-  return mn_idx;
-}
-
-void erase_duplicates(size_t r_i, std::vector<Isochrones_path_element_t> &v) {
-  size_t mn_idx = find_min_full_edge(r_i, v);
-  if (mn_idx == -1) {
-    // if no full edges, then there is no need to remove anything.
-    return;
-  }
-  size_t i = r_i;
-  v.erase(
-      // returns an iterator
-      std::remove_if(
-          // removing elements starting from r_i
-          v.begin() + r_i, v.end(),
-          [&i, &mn_idx](const Isochrones_path_element_t &p) {
-            if (is_partial_edge(p)) {
-              // do not remove partial edges.
-              i++;
-              return false;
-            }
-            return mn_idx != i++;
-          }),
-      v.end());
-}
-
 std::vector<Isochrones_path_element_t>
 do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
                   std::vector<int64_t> start_vertices,
-                  std::vector<double> distance_limits, bool remove_duplicates) {
+                  std::vector<double> distance_limits,
+                  bool only_minimum_cover) {
   std::sort(distance_limits.begin(), distance_limits.end());
   // Using max distance limit for a single dijkstra call. After that we will
   // postprocess the results and mark the visited edges.
@@ -245,7 +200,17 @@ do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
         continue;
       }
       size_t r_i = results.size();
-      if (t_reached && predecessors[e.target] != e.source) {
+      bool skip_st = false;
+      bool skip_ts = false;
+      if (only_minimum_cover) {
+        double st_dist = scost + e.cost;
+        double ts_dist = tcost + e.reverse_cost;
+        bool st_fully_covered = st_dist <= max_dist_cutoff;
+        bool ts_fully_covered = ts_dist <= max_dist_cutoff;
+        skip_ts = st_fully_covered && ts_fully_covered && st_dist < ts_dist;
+        skip_st = st_fully_covered && ts_fully_covered && ts_dist < st_dist;
+      }
+      if (!skip_ts && t_reached && predecessors[e.target] != e.source) {
         append_edge_result(tcost, e.reverse_cost, distance_limits, &results);
         for (size_t rev_i = r_i; rev_i < results.size(); ++rev_i) {
           // reversing the percentage
@@ -260,11 +225,8 @@ do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
           // results[r_i].end_perc - filled in append_edge_result
         }
       }
-      if (s_reached && predecessors[e.source] != e.target) {
+      if (!skip_st && s_reached && predecessors[e.source] != e.target) {
         append_edge_result(scost, e.cost, distance_limits, &results);
-      }
-      if (remove_duplicates) {
-        erase_duplicates(r_i, results);
       }
       for (; r_i < results.size(); ++r_i) {
         results[r_i].edge = e.id;
@@ -288,7 +250,7 @@ do_many_dijkstras(pgr_edge_t *data_edges, size_t total_edges,
 void do_pgr_many_to_isochrones(pgr_edge_t *data_edges, size_t total_edges,
                                int64_t *start_vertex, size_t s_len,
                                double *distance_cutoffs, size_t d_len,
-                               bool remove_duplicates,
+                               bool only_minimum_cover,
                                Isochrones_path_element_t **return_tuples,
                                size_t *return_count, char **log_msg,
                                char **notice_msg, char **err_msg) {
@@ -308,7 +270,7 @@ void do_pgr_many_to_isochrones(pgr_edge_t *data_edges, size_t total_edges,
     std::vector<int64_t> start_vertices(start_vertex, start_vertex + s_len);
     std::vector<double> distances(distance_cutoffs, distance_cutoffs + d_len);
     auto results = do_many_dijkstras(data_edges, total_edges, start_vertices,
-                                     distances, remove_duplicates);
+                                     distances, only_minimum_cover);
 
     size_t count(results.size());
     if (count == 0) {
