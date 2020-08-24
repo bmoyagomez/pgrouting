@@ -51,7 +51,7 @@ extern "C" {
 void do_pgr_many_to_isochrones(pgr_edge_t *edges, size_t total_edges,
                                int64_t *start_vertex, size_t s_len,
                                double *distances, size_t d_len,
-                               bool remove_duplicates,
+                               bool only_minimum_cover,
                                Isochrones_path_element_t **return_tuples,
                                size_t *return_count, char **log_msg,
                                char **notice_msg, char **err_msg);
