@@ -43,7 +43,7 @@ void process(
         char* sql,
         ArrayType *starts,
         ArrayType *distances,
-        bool remove_duplicates,
+        bool only_minimum_cover,
         Isochrones_path_element_t **result_tuples,
         size_t *result_count) {
     pgr_SPI_connect();
@@ -71,7 +71,7 @@ void process(
             edges, total_tuples,
             start_vidsArr, size_start_vidsArr,
             distance_cutoffsArr, size_distance_cutoffsArr,
-            remove_duplicates,
+            only_minimum_cover,
             result_tuples, result_count,
             &log_msg,
             &notice_msg,
